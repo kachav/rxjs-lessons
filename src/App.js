@@ -1,15 +1,40 @@
-import React, {useCallback} from 'react';
-import {useDispatch} from 'react-redux';
+import React, {useState, useCallback} from 'react';
+import {map, debounceTime} from 'rxjs/operators';
+import {combineLatest, merge} from 'rxjs';
 
-import {fetchData} from './actions/dataFetch';
 import logo from './logo.svg';
 import './App.css';
+import usePropsStream from './hooks/usePropsStream';
 
 const App  = () => {
-    const dispatch = useDispatch();
-    const onLoadData = useCallback(() => {
-        dispatch(fetchData());
-    }, [dispatch]);
+    const [firstInputValue, setFirstInputValueValue] = useState('');
+    const onFirstInputChange = useCallback(({target}) => {
+        setFirstInputValueValue(target.value);
+    }, []);
+
+    const secondInputProps = usePropsStream((props$, createEventHandler) => {
+        const [onChangeValue$, onChange] = createEventHandler();
+        const inputValue$ = onChangeValue$.pipe(
+            map(({target}) => target.value),
+        );
+        const propsValue$ = props$.pipe(
+            map(({value}) => value),
+            debounceTime(1000),
+        );
+
+        const value$ = merge(
+            inputValue$,
+            propsValue$,
+        );
+
+        return combineLatest(props$, value$).pipe(
+            map(([props, value]) => ({
+                ...props,
+                onChange,
+                value,
+            })),
+        );
+    }, {value: firstInputValue});
 
     return (
         <div className="App">
@@ -20,7 +45,8 @@ const App  = () => {
             <p className="App-intro">
                 To get started, edit <code>src/App.js</code> and save to reload.
             </p>
-            <button type="button" onClick={onLoadData} className="App-load-data">start load data</button>
+            <input onChange={onFirstInputChange} value={firstInputValue} />
+            <input {...secondInputProps} />
         </div>
     )
 };
